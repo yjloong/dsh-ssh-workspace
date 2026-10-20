@@ -1,6 +1,6 @@
 {
   "name": "dsh-ssh-workspace",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Transparent SSH workspaces for DeepSeek Harness Desktop 0.2: local runtime, remote files, search and Bash.",
   "repository": {
     "type": "git",

@@ -10,6 +10,7 @@ import { WebSocketTransport } from '@microsoft/agent-host-protocol/ws'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { ahpProtocolMismatch, DSH_AHP_PROTOCOL_VERSIONS, formatAhpProtocolMismatch } from './ahp-compat.ts'
+import { ConnectionSupervisor } from './supervisor.ts'
 
 export interface Config {
   sshTarget: string
@@ -157,7 +158,7 @@ export class RemoteSshRuntime extends Service {
   readonly runtimeRoot: string
   readonly remoteAccessRoot: string
 
-  private readonly ready: Promise<AhpConnection>
+  private readonly supervisor: ConnectionSupervisor<AhpConnection>
   private tunnel: ChildProcessWithoutNullStreams | undefined
   private embeddedAgentHost: ChildProcessWithoutNullStreams | undefined
   private disposed = false
@@ -175,12 +176,17 @@ export class RemoteSshRuntime extends Service {
     this.runtimeRoot = posix.join(this.config.remoteRuntimeRoot, this.clientId)
     this.validate()
     if (this.mapper !== undefined) mkdirSync(this.mapper.localWorkspace, { recursive: true })
-    this.ready = this.open()
-    void this.ready.catch(() => {})
+    this.supervisor = new ConnectionSupervisor(
+      () => this.open(),
+      () => this.resetSshAttempt(),
+      () => this.disposed,
+      'dsh-ssh-workspace',
+    )
     ctx.effect(() => async () => {
       this.disposed = true
+      this.supervisor.stop()
       try {
-        const connection = await this.ready
+        const connection = await this.supervisor.currentAttempt()
         await connection.client.shutdown()
       } catch {
         // A failed startup owns its original diagnostic.
@@ -193,7 +199,7 @@ export class RemoteSshRuntime extends Service {
 
   async getConnection(): Promise<AhpConnection> {
     if (this.disposed) throw new Error('Remote SSH service is disposing')
-    const connection = await this.ready
+    const connection = await this.supervisor.get()
     if (this.disposed) throw new Error('Remote SSH service is disposing')
     return connection
   }

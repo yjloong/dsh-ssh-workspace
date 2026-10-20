@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.1 — 2026-10-20
+
+- Fix permanent "client shut down" failures after the remote machine reboots or the SSH transport drops. The per-host AHP connection is now supervised: a closed connection triggers a single-flight transparent reconnect, and tool calls join the fresh attempt instead of failing forever (previously only a DSH restart recovered the workspace).
+- A failed initial connection is also healed by the next call, with reconnect attempts wrapped in a diagnostic that preserves the original cause.
+
 ## 1.0.0 — 2026-10-12
 
 Initial ahian-lee distribution, derived from Yan-Zero/dsh-remote-ssh 0.2.4.
