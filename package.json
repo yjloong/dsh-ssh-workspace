@@ -127,7 +127,7 @@
     }
   },
   "dependencies": {
-    "@microsoft/agent-host-protocol": "0.7.0"
+    "@microsoft/agent-host-protocol": "1.0.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.4",

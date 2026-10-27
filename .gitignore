@@ -2,3 +2,6 @@ node_modules
 .tmp/
 *.log
 coverage/
+
+# pnpm content-addressable store created by linked installs
+.pnpm-store/

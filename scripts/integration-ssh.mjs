@@ -7,8 +7,10 @@ import RemoteSshShellExecutor from '../lib/shell.js'
 
 const sshTarget = process.argv[2]
 const remoteWorkspace = process.argv[3]
+// fork(Linux): 远端 `code` 可能不在 PATH 上(或被旧的桌面 shim 抢占),允许显式指定。
+const remoteCodeCommand = process.argv[4]
 if (!sshTarget || !remoteWorkspace) {
-  throw new Error('usage: node scripts/integration-ssh.mjs <ssh-target> <remote-posix-workspace>')
+  throw new Error('usage: node scripts/integration-ssh.mjs <ssh-target> <remote-posix-workspace> [remote-code-command]')
 }
 
 const localWorkspace = resolve('.tmp', 'ssh-integration-alias')
@@ -16,6 +18,7 @@ const ctx = new Context()
 await ctx.plugin(RemoteSshRuntime, {
   sshTarget,
   remoteWorkspace,
+  ...(remoteCodeCommand === undefined ? {} : { remoteCodeCommand }),
   localWorkspace,
   startupTimeoutMs: 60_000,
 })

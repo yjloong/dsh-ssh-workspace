@@ -91,10 +91,64 @@ code agent host --host 127.0.0.1 --port 0 --idle-timeout 60 \
 
 | 主机 | `agent host` | `rg` | 备注 |
 |---|---|---|---|
-| ampere | ✗(`code` 1.90.1,无 `agent host` 子命令) | ✓ | 已有 `~/.dsh-ssh-workspace/` 与 `~/.vscode-server/` |
+| ampere | **✓ 1.143.1**(已装) | ✓ | 私有 CLI 位于 `~/.dsh-ssh-workspace/cli/bin/code`;旧 `/usr/bin/code` 是 1.90.1 桌面 shim,**必须用绝对路径** |
 | spr | ✗(无 code) | ✓ | |
 | datanode | ✗(无 code) | ✗ | |
 | kunpeng | ✗(无 code) | ✗ | |
 
-**因此当前可验证的范围是:插件在 Linux/Web 下正确组合、启动、注册客户端 UI,以及 LOCAL 执行世界可用。**
-远端工作区要等远端具备 `code agent host` 后才能验证。
+## 远端供给步骤(已在 ampere 验证)
+
+```sh
+# 1) 装带 agent host 的独立 CLI(注意:不是桌面版 code)
+curl -fsSL -o /tmp/cli.tar.gz https://update.code.visualstudio.com/latest/cli-linux-arm64/stable
+mkdir -p ~/.dsh-ssh-workspace/cli/bin && tar xzf /tmp/cli.tar.gz -C /tmp
+install -m 0755 /tmp/code ~/.dsh-ssh-workspace/cli/bin/code
+~/.dsh-ssh-workspace/cli/bin/code agent host --help   # 必须能打印 OPTIONS
+```
+
+**坑 1 — CLI 自己的 300s 就放弃了**:首次启动时 CLI 要下载约 217 MB 的 Server,慢链路下会撞上
+`Timed out after 300s waiting for agent host supervisor to become ready`,然后白等。绕法是自己下:
+
+```sh
+C=<CLI 的 commit,见 code --version 第二行>
+curl -L -C - -o /tmp/server.tar.gz \
+  "https://update.code.visualstudio.com/commit:$C/server-linux-arm64/stable"
+# 解到 CLI 的 --cli-data-dir 下(注意不是 ~/.vscode-server/cli)
+D="$HOME/.dsh-ssh-workspace/cli/servers/Stable-$C/server"
+mkdir -p "$D" && tar xzf /tmp/server.tar.gz -C "$D" --strip-components=1
+```
+
+**坑 2 — `$HOME` 未必是 `/home/<user>`**:ampere 上 `HOME=/data/jialong.yang`,把私有 CLI 路径
+按 `/home/...` 写会得到 `VS Code CLI not found`。
+
+**坑 3 — AHP 协议版本必须对齐**:VS Code 1.143.1 的 Agent Host 声明 AHP **1.1.0**,只接受
+`1.0.0 / 0.10.0 / 0.9.0`;而上游 pin 的 `@microsoft/agent-host-protocol@0.7.0` 只报到 `0.8.0`,
+握手直接失败:
+
+```
+AHP protocol mismatch: client offered [0.8.0, 0.7.0, ...], Agent Host accepts [1.0.0, 0.10.0, 0.9.0]
+```
+
+本 fork 因此把依赖提到 **`@microsoft/agent-host-protocol@1.0.0`**(其 `SUPPORTED_PROTOCOL_VERSIONS`
+为 `1.0.0 / 0.9.0`),交集落在 `1.0.0`。**无需改源码、无需重新构建 `lib/`** —— 版本表是在运行时从
+SDK 读的。若把依赖换回 0.7.0,握手会再次失败。
+
+## 验证结果(ampere 实测通过)
+
+以服务端视角跑 `scripts/integration-ssh.mjs`(本 fork 已加第 4 个参数用于指定远端 `code` 绝对路径),
+端到端证明「远端 fs + 远端 subprocess」:
+
+```json
+{
+  "protocolVersion": "1.0.0",
+  "seedText": "seed-from-ampere-1793098135\n",
+  "shell": {
+    "exitCode": 7,
+    "stdout": "cwd=/data/jialong.yang/dsh-ssh-test\r\nhost=AmpereAltra\r\nseed-from-ampere-1793098135\r\nerr-line\r\n"
+  }
+}
+```
+
+即:`resolve`/`readText` 读到的是**远端磁盘上的文件**,`bash` 跑在 ampere 上(`host=AmpereAltra`),
+cwd 为远端工作区,退出码 7 与 stderr 均正确回传。
+
