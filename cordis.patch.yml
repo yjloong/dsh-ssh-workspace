@@ -26,8 +26,11 @@
           name: '@deepseek-ai/dsh-fs-sandbox'
         - id: local-spill
           name: '@deepseek-ai/dsh-spill-local'
+        # fork(Linux): 本地执行世界改用 POSIX bash 提供方。上游是 Windows 桌面构建,
+        # 这里硬编码了 pwsh-sandbox;而 src/routing/manager.ts 的 dialectFor() 本身
+        # 已按平台返回 bash,所以只需换组合行。
         - id: local-shell
-          name: '@deepseek-ai/dsh-pwsh-sandbox'
+          name: '@deepseek-ai/dsh-bash-sandbox'
         - id: bridge
           name: dsh-ssh-workspace/local-bridge
           inject: [fs, subprocess, spillStore, shell]
@@ -162,8 +165,12 @@
 # Existing/restored sessions cause presets to mount during startup. Hold the
 # roster until the module-load hook is active, so its scoped search tool is
 # parsed through the remote-aware path entry from its first import onward.
-- id: agent-presets
-  inject: [remoteSshSearchHook]
+#
+# fork(Linux/web 基础模板): 基础模板里没有 `agent-presets` 这一行(它是上游
+# 桌面 profile 才有的行),继续保留会导致 patch 报 "entry not found"。此处停用;
+# 若将来 profile 里出现该行,再恢复 inject: [remoteSshSearchHook]。
+# - id: agent-presets
+#   inject: [remoteSshSearchHook]
 
 - id: spill-local
   disabled: true
